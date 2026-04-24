@@ -29,6 +29,16 @@ pip install -r requirements.txt
 python app.py
 ```
 
+`app.py` is now a thin entrypoint. Core logic lives in the `page_content_api/` package:
+
+- `page_content_api/app_factory.py` - app wiring, startup, cleanup
+- `page_content_api/handlers.py` - HTTP handlers for `/health` and `/extract`
+- `page_content_api/driver_setup.py` - ChromeDriver download and browser setup
+- `page_content_api/extraction.py` - rendered page extraction flow
+- `page_content_api/markdown_processing.py` - HTML-to-markdown conversion
+- `page_content_api/validation.py` - input parsing and host validation helpers
+- `page_content_api/config.py` - shared constants
+
 On startup, the service downloads and caches the latest stable ChromeDriver under `.drivers/<version>/chromedriver.exe`.
 
 ## API Usage
