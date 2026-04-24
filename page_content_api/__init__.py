@@ -1,3 +1,2 @@
 from .app_factory import create_app
-
-__all__ = ["create_app"]
+from .config import HOST, PORT

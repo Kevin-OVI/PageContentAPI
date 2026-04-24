@@ -2,6 +2,13 @@ import os
 from pathlib import Path
 
 
+def _read_str_env(name: str, default: str) -> str:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+    return raw_value.strip()
+
+
 def _read_int_env(name: str, default: int, *, min_value: int | None = None) -> int:
     raw_value = os.getenv(name)
     if raw_value is None:
@@ -31,6 +38,8 @@ DRIVER_POOL_IDLE_TIMEOUT_SECONDS = _read_int_env(
     120,
     min_value=0,
 )
+HOST = _read_str_env("HOST", "0.0.0.0")
+PORT = _read_int_env("PORT", 8080, min_value=1)
 
 if DRIVER_POOL_MAX_ACTIVE < DRIVER_POOL_MIN_ACTIVE:
     raise ValueError("DRIVER_POOL_MAX_ACTIVE must be greater than or equal to DRIVER_POOL_MIN_ACTIVE.")
