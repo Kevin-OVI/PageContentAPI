@@ -87,8 +87,8 @@ Parameters:
 POST example:
 
 ```cmd
-curl -X POST http://127.0.0.1:8080/extract ^
-  -H "Content-Type: application/json" ^
+curl -X POST http://127.0.0.1:8080/extract \
+  -H "Content-Type: application/json" \
   -d "{\"url\":\"https://example.com\",\"include_links\":true,\"include_media\":false}"
 ```
 
