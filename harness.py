@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import time
 
 from aiohttp import ClientSession
 
@@ -9,6 +10,8 @@ async def run(
     target_url: str,
     include_links: bool,
     include_media: bool,
+    concurrency: int,
+    count: int,
 ) -> None:
     async with ClientSession() as session:
         payload = {
@@ -16,19 +19,37 @@ async def run(
             "include_links": include_links,
             "include_media": include_media,
         }
-        async with session.post(f"{api_url}/extract", json=payload) as response:
-            payload = await response.json()
 
-    print(f"Status: {response.status}")
-    if response.status != 200:
-        print(payload)
-        return
+        semaphore = asyncio.Semaphore(max(1, concurrency))
 
-    print(f"Title: {payload.get('title', '')}")
-    print(f"Final URL: {payload.get('url', '')}")
-    markdown = payload.get("markdown", "")
-    print("Markdown:\n")
-    print(markdown)
+        async def one_request(index: int) -> tuple[int, dict, int, int]:
+            started = time.monotonic()
+            async with semaphore:
+                async with session.post(f"{api_url}/extract", json=payload) as response:
+                    body = await response.json()
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    return index, body, response.status, elapsed_ms
+
+        total_started = time.monotonic()
+        results = await asyncio.gather(*(one_request(i + 1) for i in range(count)))
+        total_elapsed_ms = int((time.monotonic() - total_started) * 1000)
+
+    ok = 0
+    for index, body, status, elapsed_ms in results:
+        print(f"Request {index}: status={status} elapsed_ms={elapsed_ms}")
+        if status == 200:
+            ok += 1
+        else:
+            print(body)
+
+    print(f"Completed: {ok}/{count} succeeded, total_elapsed_ms={total_elapsed_ms}")
+
+    first_ok = next((body for _, body, status, _ in results if status == 200), None)
+    if first_ok:
+        print(f"Sample Title: {first_ok.get('title', '')}")
+        print(f"Sample Final URL: {first_ok.get('url', '')}")
+        if count == 1:
+            print(f"Sample Markdown:\n{first_ok.get('markdown', '')}...")
 
 
 if __name__ == "__main__":
@@ -38,6 +59,18 @@ if __name__ == "__main__":
         "--api-url",
         default="http://127.0.0.1:8080",
         help="Base URL for the API server",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+        help="Maximum number of in-flight requests",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=1,
+        help="Total number of requests to send",
     )
     parser.add_argument(
         "--include-links",
@@ -72,6 +105,8 @@ if __name__ == "__main__":
             args.url,
             args.include_links,
             args.include_media,
+            args.concurrency,
+            args.count,
         ),
     )
 

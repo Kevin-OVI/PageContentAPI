@@ -1,12 +1,14 @@
-import asyncio
 import json
 import logging
+import time
 from urllib.parse import urlparse
 
 from aiohttp import web
 from selenium.common import TimeoutException, WebDriverException
+from selenium.webdriver.chrome.webdriver import WebDriver
 
-from ..browser import extract_markdown_with_tab
+from ..browser import DriverPool, extract_markdown_with_tab
+from ..config import MAX_MARKDOWN_CHARS, TIMEOUT_SECONDS
 from ..validation import is_http_url, looks_local_host, parse_bool_param
 
 LOGGER = logging.getLogger(__name__)
@@ -53,24 +55,30 @@ async def handle_extract(request: web.Request) -> web.Response:
             status=400,
         )
 
-    timeout_seconds = int(request.app["timeout_seconds"])
-    max_chars = int(request.app["max_markdown_chars"])
-    driver = request.app["driver"]
-    lock = request.app["driver_lock"]
+    driver_pool: DriverPool = request.app["driver_pool"]
+    acquire_started = time.monotonic()
+
+    def use_driver(driver: WebDriver):
+        pool_wait_ms = int((time.monotonic() - acquire_started) * 1000)
+        LOGGER.info("Driver acquired for hostname=%s wait_ms=%d", hostname, pool_wait_ms)
+
+        extraction_started = time.monotonic()
+        result = extract_markdown_with_tab(driver, url, TIMEOUT_SECONDS, MAX_MARKDOWN_CHARS, include_links, include_media)
+        extraction_ms = int((time.monotonic() - extraction_started) * 1000)
+
+        LOGGER.info(
+            "Request succeeded for hostname=%s extract_ms=%d total_ms=%d",
+            hostname,
+            extraction_ms,
+            int((time.monotonic() - acquire_started) * 1000),
+        )
+        return result
 
     try:
-        async with lock:
-            result = await asyncio.to_thread(
-                extract_markdown_with_tab,
-                driver,
-                url,
-                timeout_seconds,
-                max_chars,
-                include_links,
-                include_media,
-            )
-        LOGGER.info("Request succeeded for hostname=%s", hostname)
-        return web.json_response(result)
+        return web.json_response(await driver_pool.use(use_driver))
+    except RuntimeError as exc:
+        LOGGER.error("Driver pool unavailable: %s", exc)
+        return web.json_response({"error": "Driver pool unavailable."}, status=503)
     except TimeoutException:
         LOGGER.warning("Request timed out for url=%s", url)
         return web.json_response({"error": "Page load timed out."}, status=504)

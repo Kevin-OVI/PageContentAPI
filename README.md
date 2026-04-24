@@ -8,6 +8,7 @@ This project exposes an HTTP API that loads web pages with ChromeDriver and retu
 - Downloads the latest stable ChromeDriver at startup
 - Uses headless Chrome via Selenium to render dynamic pages
 - Converts main page content to markdown
+- Uses a configurable ChromeDriver pool for concurrent requests
 
 ## Requirements
 
@@ -23,6 +24,16 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Configuration
+
+The service reads these environment variables on startup:
+
+- `DRIVER_POOL_MIN_ACTIVE` (default: `1`)
+- `DRIVER_POOL_MAX_ACTIVE` (default: `4`)
+- `DRIVER_POOL_IDLE_TIMEOUT_SECONDS` (default: `120`)
+
+`DRIVER_POOL_MAX_ACTIVE` must be greater than or equal to `DRIVER_POOL_MIN_ACTIVE`.
+
 ## Run API
 
 ```cmd
@@ -32,12 +43,13 @@ python app.py
 `app.py` is now a thin entrypoint. Core logic lives in the `page_content_api/` package:
 
 - `page_content_api/app_factory.py` - app wiring, startup, cleanup
-- `page_content_api/handlers.py` - HTTP handlers for `/health` and `/extract`
-- `page_content_api/driver_setup.py` - ChromeDriver download and browser setup
-- `page_content_api/extraction.py` - rendered page extraction flow
-- `page_content_api/markdown_processing.py` - HTML-to-markdown conversion
+- `page_content_api/routes/*.py` - HTTP handlers for `/health` and `/extract`
+- `page_content_api/browser/driver_setup.py` - ChromeDriver download and browser setup
+- `page_content_api/browser/driver_pool.py` - pooled ChromeDriver lifecycle management
+- `page_content_api/browser/extraction.py` - rendered page extraction flow
+- `page_content_api/browser/markdown_processing.py` - HTML-to-markdown conversion
 - `page_content_api/validation.py` - input parsing and host validation helpers
-- `page_content_api/config.py` - shared constants
+- `page_content_api/config.py` - shared constants and env-based settings
 
 On startup, the service downloads and caches the latest stable ChromeDriver under `.drivers/<version>/chromedriver.exe`.
 
@@ -76,5 +88,3 @@ This prints status, title, final URL, and a markdown preview.
 - The API blocks local/private hosts to reduce SSRF risk.
 - Long pages are truncated to keep payloads bounded.
 - If page load times out, API returns `504`.
-
-
