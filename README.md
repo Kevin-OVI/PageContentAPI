@@ -1,20 +1,21 @@
-# Page Content API (aiohttp + ChromeDriver)
+# Page Content API (aiohttp + Selenium + ChromeDriver)
 
-This project exposes an HTTP API that loads web pages with ChromeDriver and returns extracted page content in markdown.
+Page Content API loads a web page in headless Chrome and returns the extracted main content as markdown.
 
 ## Features
 
-- `aiohttp` API with `/extract` endpoint
-- Downloads the latest stable ChromeDriver at startup
-- Uses headless Chrome via Selenium to render dynamic pages
-- Converts main page content to markdown
-- Uses a configurable ChromeDriver pool for concurrent requests
+- `aiohttp` API with `GET /health` and `GET`/`POST /extract`
+- Renders dynamic pages using Selenium + headless Chrome
+- Converts extracted content to markdown (`main`/`article`/`role="main"` preferred)
+- Optional extraction controls for links and media
+- Configurable ChromeDriver pool for concurrent requests
+- Automatic ChromeDriver download and cache in `.drivers/<version>/`
 
 ## Requirements
 
 - Python 3.10+
-- Google Chrome installed
-- Windows (current implementation downloads `chromedriver.exe`)
+- Google Chrome or Chromium installed locally
+- Network access to Chrome for Testing metadata/download endpoints at startup
 
 ## Setup
 
@@ -26,34 +27,37 @@ pip install -r requirements.txt
 
 ## Configuration
 
-The service reads these environment variables on startup:
+The service reads these environment variables at import/startup:
 
-- `DRIVER_POOL_MIN_ACTIVE` (default: `1`)
-- `DRIVER_POOL_MAX_ACTIVE` (default: `4`)
-- `DRIVER_POOL_IDLE_TIMEOUT_SECONDS` (default: `120`)
+- `HOST` (default: `0.0.0.0`)
+- `PORT` (default: `8080`)
+- `TIMEOUT_SECONDS` (default: `25`, minimum: `1`)
+- `MAX_MARKDOWN_CHARS` (default: `100000`, minimum: `1`)
+- `DRIVER_POOL_MIN_ACTIVE` (default: `1`, minimum: `0`)
+- `DRIVER_POOL_MAX_ACTIVE` (default: `4`, minimum: `1`)
+- `DRIVER_POOL_IDLE_TIMEOUT_SECONDS` (default: `120`, minimum: `0`)
 
-`DRIVER_POOL_MAX_ACTIVE` must be greater than or equal to `DRIVER_POOL_MIN_ACTIVE`.
+Constraint:
+
+- `DRIVER_POOL_MAX_ACTIVE >= DRIVER_POOL_MIN_ACTIVE`
 
 ## Run API
+
+Default host/port (from env or defaults):
 
 ```cmd
 python app.py
 ```
 
-`app.py` is now a thin entrypoint. Core logic lives in the `page_content_api/` package:
+Override host/port from CLI:
 
-- `page_content_api/app_factory.py` - app wiring, startup, cleanup
-- `page_content_api/routes/*.py` - HTTP handlers for `/health` and `/extract`
-- `page_content_api/browser/driver_setup.py` - ChromeDriver download and browser setup
-- `page_content_api/browser/driver_pool.py` - pooled ChromeDriver lifecycle management
-- `page_content_api/browser/extraction.py` - rendered page extraction flow
-- `page_content_api/browser/markdown_processing.py` - HTML-to-markdown conversion
-- `page_content_api/validation.py` - input parsing and host validation helpers
-- `page_content_api/config.py` - shared constants and env-based settings
+```cmd
+python app.py --host 127.0.0.1 --port 8080
+```
 
-On startup, the service downloads and caches the latest stable ChromeDriver under `.drivers/<version>/chromedriver.exe`.
+On startup, the app resolves a platform-specific ChromeDriver (`win32`/`win64`/`mac-arm64`/`mac-x64`/`linux64`) and tries to match the locally installed Chrome version before falling back to the latest stable driver.
 
-## API Usage
+## API
 
 ### Health check
 
@@ -61,30 +65,96 @@ On startup, the service downloads and caches the latest stable ChromeDriver unde
 curl http://127.0.0.1:8080/health
 ```
 
-### Extract markdown
+Response:
+
+```json
+{"status":"ok"}
+```
+
+### Extract content
+
+Supported methods:
+
+- `POST /extract` with JSON body
+- `GET /extract` with query parameters
+
+Parameters:
+
+- `url` (required): `http`/`https` URL
+- `include_links` (optional, default `true`): accepts booleans and values like `true/false`, `1/0`, `yes/no`, `on/off`
+- `include_media` (optional, default `true`): same boolean parsing as above
+
+POST example:
 
 ```cmd
 curl -X POST http://127.0.0.1:8080/extract ^
   -H "Content-Type: application/json" ^
-  -d "{\"url\":\"https://example.com\"}"
+  -d "{\"url\":\"https://example.com\",\"include_links\":true,\"include_media\":false}"
 ```
 
-You can also use a query string:
+GET example:
 
 ```cmd
-curl "http://127.0.0.1:8080/extract?url=https://example.com"
+curl "http://127.0.0.1:8080/extract?url=https://example.com&include_links=false&include_media=true"
 ```
 
+Success response (`200`):
+
+```json
+{
+  "title": "Example Domain",
+  "url": "https://example.com/",
+  "markdown": "# Example Domain\n\n..."
+}
+```
+
+Common error statuses:
+
+- `400` invalid JSON, invalid URL, invalid boolean parameters, or local/private host blocked
+- `502` ChromeDriver/Selenium failure
+- `503` driver pool unavailable
+- `504` page load timeout
+- `500` unexpected error fallback
+
 ## Local Harness
+
+Single request:
 
 ```cmd
 python harness.py https://example.com
 ```
 
-This prints status, title, final URL, and a markdown preview.
+Concurrent run with extraction options:
 
-## Notes
+```cmd
+python harness.py https://example.com --concurrency 4 --count 10 --no-include-media
+```
 
-- The API blocks local/private hosts to reduce SSRF risk.
-- Long pages are truncated to keep payloads bounded.
-- If page load times out, API returns `504`.
+You can also target a non-default API base URL:
+
+```cmd
+python harness.py https://example.com --api-url http://127.0.0.1:8080
+```
+
+## Project Layout
+
+- `app.py` - CLI entrypoint and server startup
+- `harness.py` - local request runner/load helper
+- `page_content_api/app_factory.py` - app wiring, startup, and cleanup hooks
+- `page_content_api/routes/extract.py` - `/extract` request handling and validation
+- `page_content_api/routes/health.py` - `/health` handler
+- `page_content_api/browser/driver_setup.py` - driver resolution/download and WebDriver creation
+- `page_content_api/browser/driver_pool.py` - pooled driver lifecycle and concurrency control
+- `page_content_api/browser/extraction.py` - rendered page extraction flow
+- `page_content_api/browser/markdown_processing.py` - HTML cleanup and markdown conversion
+- `page_content_api/config.py` - constants and environment-backed settings
+- `page_content_api/validation.py` - URL/host/boolean validation helpers
+
+## Dependencies
+
+From `requirements.txt`:
+
+- `aiohttp`
+- `selenium`
+- `beautifulsoup4`
+- `markdownify`
