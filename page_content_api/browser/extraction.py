@@ -10,13 +10,13 @@ from .markdown_processing import html_fragment_to_markdown
 LOGGER = logging.getLogger(__name__)
 
 
-def extract_markdown_with_tab(
-    driver: webdriver.Chrome,
-    url: str,
-    timeout_seconds: int,
-    max_chars: int,
-    include_links: bool,
-    include_media: bool,
+def extract_markdown(
+        driver: webdriver.Chrome,
+        url: str,
+        timeout_seconds: int,
+        max_chars: int,
+        include_links: bool,
+        include_media: bool,
 ) -> dict[str, Any]:
     LOGGER.info("Starting page extraction for url=%s", url)
     try:

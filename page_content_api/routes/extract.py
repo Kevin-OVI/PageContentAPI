@@ -7,7 +7,7 @@ from aiohttp import web
 from selenium.common import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from ..browser import DriverPool, extract_markdown_with_tab
+from ..browser import DriverPool, extract_markdown
 from ..config import MAX_MARKDOWN_CHARS, TIMEOUT_SECONDS
 from ..validation import is_http_url, looks_local_host, parse_bool_param
 
@@ -63,7 +63,7 @@ async def handle_extract(request: web.Request) -> web.Response:
         LOGGER.info("Driver acquired for hostname=%s wait_ms=%d", hostname, pool_wait_ms)
 
         extraction_started = time.monotonic()
-        result = extract_markdown_with_tab(driver, url, TIMEOUT_SECONDS, MAX_MARKDOWN_CHARS, include_links, include_media)
+        result = extract_markdown(driver, url, TIMEOUT_SECONDS, MAX_MARKDOWN_CHARS, include_links, include_media)
         extraction_ms = int((time.monotonic() - extraction_started) * 1000)
 
         LOGGER.info(
