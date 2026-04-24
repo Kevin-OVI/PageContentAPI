@@ -3,9 +3,10 @@ import logging
 from pathlib import Path
 from typing import Callable
 
-from selenium import webdriver
+from selenium.webdriver.chrome.webdriver import WebDriver
 
 from .driver_setup import create_driver
+from ..config import RESET_URL
 
 LOGGER = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 class _PoolDriverEntry:
     __slots__ = ("pool", "driver", "idle_event", "_reap_timer")
 
-    def __init__(self, pool: DriverPool, driver: webdriver.Chrome):
+    def __init__(self, pool: DriverPool, driver: WebDriver):
         self.pool = pool
         self.driver = driver
         self.idle_event = asyncio.Event()
@@ -99,7 +100,8 @@ class DriverPool:
 
     async def _start_driver(self) -> _PoolDriverEntry:
         LOGGER.info("Starting new driver instance")
-        driver = await asyncio.to_thread(create_driver, self.driver_path, self.timeout_seconds)
+        driver: WebDriver = await asyncio.to_thread(create_driver, self.driver_path, self.timeout_seconds)
+        driver.get(RESET_URL)
         LOGGER.info("Started new driver instance")
         return _PoolDriverEntry(self, driver)
 
@@ -138,7 +140,7 @@ class DriverPool:
         async with self._release_condition:
             self._release_condition.notify()
 
-    async def use[T](self, callback: Callable[[webdriver.Chrome], T]) -> T:
+    async def use[T](self, callback: Callable[[WebDriver], T]) -> T:
         pool_driver = await self._acquire_driver()
         try:
             return await asyncio.to_thread(callback, pool_driver.driver)

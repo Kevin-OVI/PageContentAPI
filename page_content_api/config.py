@@ -29,6 +29,7 @@ LATEST_DRIVER_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/las
 LATEST_PATCH_BY_BUILD_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build-with-downloads.json"
 LATEST_BY_MILESTONE_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json"
 DRIVER_ROOT = Path(__file__).resolve().parent.parent / ".drivers"
+RESET_URL = "about:blank"
 TIMEOUT_SECONDS = _read_int_env("TIMEOUT_SECONDS", 25, min_value=1)
 MAX_MARKDOWN_CHARS = _read_int_env("MAX_MARKDOWN_CHARS", 100_000, min_value=1)
 DRIVER_POOL_MIN_ACTIVE = _read_int_env("DRIVER_POOL_MIN_ACTIVE", 1, min_value=0)

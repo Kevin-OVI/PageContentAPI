@@ -6,6 +6,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
 from .markdown_processing import html_fragment_to_markdown
+from ..config import RESET_URL
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,6 +25,9 @@ def extract_markdown(
         WebDriverWait(driver, timeout_seconds).until(
             lambda d: d.execute_script("return document.readyState") == "complete",
         )
+        if driver.current_url == RESET_URL:
+            LOGGER.error(f"Page failed to load and is still at {RESET_URL} for url=%s", url)
+            raise TimeoutError("Page failed to load within the specified timeout.")
         time.sleep(2)  # Allow additional time for dynamic content to load.
 
         title = driver.title or ""
@@ -47,6 +51,5 @@ def extract_markdown(
             "markdown": markdown,
         }
     finally:
-        driver.get("about:blank")
+        driver.get(RESET_URL)
         driver.delete_all_cookies()
-

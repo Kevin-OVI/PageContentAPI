@@ -79,7 +79,7 @@ async def handle_extract(request: web.Request) -> web.Response:
     except RuntimeError as exc:
         LOGGER.error("Driver pool unavailable: %s", exc)
         return web.json_response({"error": "Driver pool unavailable."}, status=503)
-    except TimeoutException:
+    except (TimeoutError, TimeoutException):
         LOGGER.warning("Request timed out for url=%s", url)
         return web.json_response({"error": "Page load timed out."}, status=504)
     except WebDriverException as exc:
