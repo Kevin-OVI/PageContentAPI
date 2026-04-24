@@ -1,6 +1,8 @@
 import io
 import logging
 import platform
+import re
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -9,13 +11,147 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from ..config import DRIVER_ROOT, LATEST_DRIVER_INDEX
+from ..config import (
+    DRIVER_ROOT,
+    LATEST_BY_MILESTONE_INDEX,
+    LATEST_DRIVER_INDEX,
+    LATEST_PATCH_BY_BUILD_INDEX,
+)
 
 LOGGER = logging.getLogger(__name__)
+_VERSION_RE = re.compile(r"(\d+\.\d+\.\d+\.\d+)")
 
 
 class DriverDownloadError(RuntimeError):
     pass
+
+
+def _extract_version(text: str) -> str | None:
+    match = _VERSION_RE.search(text)
+    return match.group(1) if match else None
+
+
+def _run_command(command: list[str]) -> str | None:
+    try:
+        process = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if process.returncode != 0:
+        return None
+
+    return process.stdout or process.stderr
+
+
+def detect_local_chrome_version() -> str | None:
+    system_name = platform.system().lower()
+
+    if system_name == "windows":
+        commands = [
+            ["reg", "query", r"HKCU\Software\Google\Chrome\BLBeacon", "/v", "version"],
+            ["reg", "query", r"HKLM\Software\Google\Chrome\BLBeacon", "/v", "version"],
+            ["reg", "query", r"HKLM\Software\WOW6432Node\Google\Chrome\BLBeacon", "/v", "version"],
+        ]
+    elif system_name == "darwin":
+        commands = [
+            ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"],
+        ]
+    elif system_name == "linux":
+        commands = [
+            ["google-chrome", "--version"],
+            ["google-chrome-stable", "--version"],
+            ["chromium", "--version"],
+            ["chromium-browser", "--version"],
+        ]
+    else:
+        return None
+
+    for command in commands:
+        output = _run_command(command)
+        if not output:
+            continue
+
+        version = _extract_version(output)
+        if version:
+            return version
+
+    return None
+
+
+def _select_platform_candidate(downloads: list[dict], platform_key: str) -> dict | None:
+    return next(
+        (entry for entry in downloads if entry.get("platform") == platform_key),
+        None,
+    )
+
+
+async def _read_json(session: ClientSession, url: str, timeout: int, label: str) -> dict:
+    async with session.get(url, timeout=timeout) as response:
+        if response.status != 200:
+            raise DriverDownloadError(f"Failed to read {label}: HTTP {response.status}")
+        return await response.json()
+
+
+async def _resolve_download_for_local_chrome(
+        session: ClientSession,
+        platform_key: str,
+) -> tuple[str, dict] | None:
+    local_version = detect_local_chrome_version()
+    if not local_version:
+        LOGGER.info("Could not detect installed Chrome version; falling back to stable channel")
+        return None
+
+    parts = local_version.split(".")
+    if len(parts) < 3:
+        LOGGER.info("Detected Chrome version has unexpected format (%s); falling back to stable channel", local_version)
+        return None
+
+    build_key = ".".join(parts[:3])
+    milestone = parts[0]
+    LOGGER.info("Detected local Chrome version=%s (build=%s, milestone=%s)", local_version, build_key, milestone)
+
+    try:
+        build_metadata = await _read_json(
+            session,
+            LATEST_PATCH_BY_BUILD_INDEX,
+            30,
+            "patch-by-build index",
+        )
+        build_entry = build_metadata.get("builds", {}).get(build_key, {})
+        version = build_entry.get("version")
+        downloads = build_entry.get("downloads", {}).get("chromedriver", [])
+        candidate = _select_platform_candidate(downloads, platform_key)
+        if version and candidate:
+            LOGGER.info("Resolved ChromeDriver version=%s from build=%s", version, build_key)
+            return version, candidate
+    except DriverDownloadError as exc:
+        LOGGER.warning("Failed to resolve ChromeDriver by build: %s", exc)
+
+    try:
+        milestone_metadata = await _read_json(
+            session,
+            LATEST_BY_MILESTONE_INDEX,
+            30,
+            "milestone index",
+        )
+        milestone_entry = milestone_metadata.get("milestones", {}).get(milestone, {})
+        version = milestone_entry.get("version")
+        downloads = milestone_entry.get("downloads", {}).get("chromedriver", [])
+        candidate = _select_platform_candidate(downloads, platform_key)
+        if version and candidate:
+            LOGGER.info("Resolved ChromeDriver version=%s from milestone=%s", version, milestone)
+            return version, candidate
+    except DriverDownloadError as exc:
+        LOGGER.warning("Failed to resolve ChromeDriver by milestone: %s", exc)
+
+    LOGGER.info("No ChromeDriver mapping found for local Chrome version=%s; using stable channel", local_version)
+    return None
 
 
 def resolve_driver_target() -> tuple[str, str]:
@@ -46,28 +182,23 @@ async def download_latest_chromedriver() -> tuple[str, Path]:
     DRIVER_ROOT.mkdir(parents=True, exist_ok=True)
 
     platform_key, driver_filename = resolve_driver_target()
-    LOGGER.info("Resolving latest ChromeDriver for platform=%s", platform_key)
+    LOGGER.info("Resolving ChromeDriver for platform=%s", platform_key)
 
     async with ClientSession() as session:
-        async with session.get(LATEST_DRIVER_INDEX, timeout=30) as response:
-            if response.status != 200:
+        resolved = await _resolve_download_for_local_chrome(session, platform_key)
+        if resolved is None:
+            metadata = await _read_json(session, LATEST_DRIVER_INDEX, 30, "driver index")
+            stable = metadata.get("channels", {}).get("Stable", {})
+            version = stable.get("version")
+            downloads = stable.get("downloads", {}).get("chromedriver", [])
+            candidate = _select_platform_candidate(downloads, platform_key)
+            if not candidate or not version:
                 raise DriverDownloadError(
-                    f"Failed to read driver index: HTTP {response.status}",
+                    f"No ChromeDriver download found for platform '{platform_key}'.",
                 )
-            metadata = await response.json()
-
-        stable = metadata.get("channels", {}).get("Stable", {})
-        version = stable.get("version")
-        downloads = stable.get("downloads", {}).get("chromedriver", [])
-        candidate = next(
-            (entry for entry in downloads if entry.get("platform") == platform_key),
-            None,
-        )
-
-        if not candidate or not version:
-            raise DriverDownloadError(
-                f"No ChromeDriver download found for platform '{platform_key}'.",
-            )
+            LOGGER.info("Using stable-channel ChromeDriver version=%s", version)
+        else:
+            version, candidate = resolved
 
         target_dir = DRIVER_ROOT / version
         driver_path = target_dir / driver_filename
