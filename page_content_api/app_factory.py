@@ -2,7 +2,7 @@ import logging
 
 from aiohttp import web
 
-from .browser import DriverPool, download_latest_chromedriver
+from .browser import DriverPool, download_chromedriver
 from .config import (
     DRIVER_POOL_IDLE_TIMEOUT_SECONDS,
     DRIVER_POOL_MAX_ACTIVE,
@@ -16,7 +16,7 @@ LOGGER = logging.getLogger(__name__)
 
 async def on_startup(app: web.Application) -> None:
     LOGGER.info("Server startup: initializing ChromeDriver")
-    version, driver_path = await download_latest_chromedriver()
+    version, driver_path = await download_chromedriver()
     pool = DriverPool(
         driver_path,
         TIMEOUT_SECONDS,

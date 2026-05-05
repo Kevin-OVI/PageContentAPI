@@ -178,7 +178,7 @@ def resolve_driver_target() -> tuple[str, str]:
     raise DriverDownloadError(f"Unsupported operating system: {platform.system()}")
 
 
-async def download_latest_chromedriver() -> tuple[str, Path]:
+async def download_chromedriver() -> tuple[str, Path]:
     DRIVER_ROOT.mkdir(parents=True, exist_ok=True)
 
     platform_key, driver_filename = resolve_driver_target()
