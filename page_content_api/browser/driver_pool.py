@@ -5,18 +5,19 @@ from typing import Callable
 
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from .driver_setup import create_driver
+from .driver_setup import create_driver, create_profile_dir_from_template, remove_profile_dir
 from ..config import RESET_URL
 
 LOGGER = logging.getLogger(__name__)
 
 
 class _PoolDriverEntry:
-    __slots__ = ("pool", "driver", "idle_event", "_reap_timer")
+    __slots__ = ("pool", "driver", "user_data_dir", "idle_event", "_reap_timer")
 
-    def __init__(self, pool: DriverPool, driver: WebDriver):
+    def __init__(self, pool: DriverPool, driver: WebDriver, user_data_dir: Path | None):
         self.pool = pool
         self.driver = driver
+        self.user_data_dir = user_data_dir
         self.idle_event = asyncio.Event()
         self.idle_event.set()
         self._reap_timer: asyncio.TimerHandle | None = None
@@ -39,12 +40,25 @@ class _PoolDriverEntry:
         self.start_reap_task()
 
     async def close(self):
-        await asyncio.to_thread(self.driver.quit)
+        try:
+            await asyncio.to_thread(self.driver.quit)
+        finally:
+            await asyncio.to_thread(remove_profile_dir, self.user_data_dir)
 
 
 class DriverPool:
-    __slots__ = ("driver_path", "timeout_seconds", "min_active", "max_active", "idle_timeout_seconds", "_idle_drivers",
-                 "_in_use_drivers", "_release_condition", "_total_drivers", "_closed")
+    __slots__ = (
+        "driver_path",
+        "timeout_seconds",
+        "min_active",
+        "max_active",
+        "idle_timeout_seconds",
+        "_idle_drivers",
+        "_in_use_drivers",
+        "_release_condition",
+        "_total_drivers",
+        "_closed"
+    )
 
     def __init__(self, driver_path: Path, timeout_seconds: int, min_active: int, max_active: int, idle_timeout_seconds: int):
         if min_active < 0:
@@ -100,10 +114,15 @@ class DriverPool:
 
     async def _start_driver(self) -> _PoolDriverEntry:
         LOGGER.info("Starting new driver instance")
-        driver: WebDriver = await asyncio.to_thread(create_driver, self.driver_path, self.timeout_seconds)
+        user_data_dir = await asyncio.to_thread(create_profile_dir_from_template)
+        try:
+            driver: WebDriver = await asyncio.to_thread(create_driver, self.driver_path, self.timeout_seconds, user_data_dir)
+        except Exception:
+            await asyncio.to_thread(remove_profile_dir, user_data_dir)
+            raise
         driver.get(RESET_URL)
         LOGGER.info("Started new driver instance")
-        return _PoolDriverEntry(self, driver)
+        return _PoolDriverEntry(self, driver, user_data_dir)
 
     def _reap_driver(self, entry: _PoolDriverEntry):
         if self._total_drivers > self.min_active and entry in self._idle_drivers:

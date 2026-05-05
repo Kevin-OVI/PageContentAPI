@@ -40,6 +40,7 @@ The service reads these environment variables at import/startup:
 Constraint:
 
 - `DRIVER_POOL_MAX_ACTIVE >= DRIVER_POOL_MIN_ACTIVE`
+Per-driver Chrome profiles are created from `assets/chrome-profile-template.zip` and deleted when each driver closes.
 
 ## Run API
 

@@ -1,8 +1,11 @@
 import io
 import logging
+import os
 import platform
 import re
+import shutil
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -20,6 +23,7 @@ from ..config import (
 
 LOGGER = logging.getLogger(__name__)
 _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+\.\d+)")
+_PROFILE_TEMPLATE_ZIP = "./assets/chrome-profile-template.zip"
 
 
 class DriverDownloadError(RuntimeError):
@@ -240,14 +244,39 @@ async def download_chromedriver() -> tuple[str, Path]:
     return version, driver_path
 
 
-def create_driver(driver_path: Path, timeout_seconds: int) -> webdriver.Chrome:
+def create_driver(driver_path: Path, timeout_seconds: int, user_data_dir: Path | None) -> webdriver.Chrome:
     options = Options()
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
 
+    if user_data_dir is not None:
+        user_data_dir.mkdir(parents=True, exist_ok=True)
+        options.add_argument(f"--user-data-dir={user_data_dir}")
+
     service = Service(executable_path=str(driver_path))
     driver = webdriver.Chrome(service=service, options=options)
     driver.set_page_load_timeout(timeout_seconds)
     return driver
+
+
+def create_profile_dir_from_template() -> Path:
+    if not os.path.exists(_PROFILE_TEMPLATE_ZIP):
+        raise FileNotFoundError(f"Chrome profile template not found at {_PROFILE_TEMPLATE_ZIP}")
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="chrome-profile-"))
+    try:
+        with zipfile.ZipFile(_PROFILE_TEMPLATE_ZIP) as zf:
+            zf.extractall(temp_dir)
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
+    return temp_dir
+
+
+def remove_profile_dir(path: Path | None) -> None:
+    if path is None:
+        return
+    shutil.rmtree(path, ignore_errors=True)
