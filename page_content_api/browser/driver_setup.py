@@ -244,7 +244,6 @@ def create_driver(driver_path: Path, timeout_seconds: int) -> webdriver.Chrome:
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
     service = Service(executable_path=str(driver_path))
