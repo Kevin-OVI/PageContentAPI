@@ -242,6 +242,7 @@ async def download_latest_chromedriver() -> tuple[str, Path]:
 
 def create_driver(driver_path: Path, timeout_seconds: int) -> webdriver.Chrome:
     options = Options()
+    options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-dev-shm-usage")
