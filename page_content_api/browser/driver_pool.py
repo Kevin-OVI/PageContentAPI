@@ -123,7 +123,10 @@ class DriverPool:
                 if self._total_drivers < self.max_active:
                     self._total_drivers += 1
                     try:
-                        return await self._start_driver()
+                        pool_driver = await self._start_driver()
+                        pool_driver.set_in_use()
+                        self._in_use_drivers.add(pool_driver)
+                        return pool_driver
                     except Exception:
                         self._total_drivers -= 1
                         raise
@@ -132,10 +135,12 @@ class DriverPool:
                         await self._release_condition.wait()
             else:
                 pool_driver.set_in_use()
+                self._in_use_drivers.add(pool_driver)
                 return pool_driver
 
     async def _release_driver(self, pool_driver: _PoolDriverEntry):
         pool_driver.set_idle()
+        self._in_use_drivers.discard(pool_driver)
         self._idle_drivers.add(pool_driver)
         async with self._release_condition:
             self._release_condition.notify()
