@@ -8,7 +8,6 @@ LOGGER = logging.getLogger(__name__)
 
 
 async def handle_health(request: web.Request) -> web.Response:
-    LOGGER.info("Received health check request method=%s path=%s", request.method, request.path)
     driver_pool = request.app.get("driver_pool")
     if driver_pool is None or (isinstance(driver_pool, DriverPool) and driver_pool.closed):
         return web.json_response(
@@ -24,6 +23,5 @@ async def handle_health(request: web.Request) -> web.Response:
             {"status": "unavailable", "reason": "driver_pool_unhealthy"},
             status=503,
         )
-    LOGGER.info("Health check passed")
 
     return web.json_response({"status": "ok"})
