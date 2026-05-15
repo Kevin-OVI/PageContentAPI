@@ -3,9 +3,16 @@ import logging
 
 from aiohttp import web
 
-from page_content_api import HOST, PORT, create_app
+from page_content_api import HOST, LOG_HEALTH_REQUESTS, PORT, create_app
 
 LOGGER = logging.getLogger(__name__)
+
+
+class HealthFilterAccessLogger(web.AccessLogger):
+    def log(self, request: web.Request, response: web.StreamResponse, time: float) -> None:
+        if not LOG_HEALTH_REQUESTS and request.path == "/health":
+            return
+        super().log(request, response, time)
 
 
 def _parse_port(value: str) -> int:
@@ -33,6 +40,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--port", type=_parse_port, help="Port to listen on.")
     return parser.parse_args()
 
+
 if __name__ == "__main__":
     args = _parse_args()
     host = args.host if args.host is not None else HOST
@@ -40,4 +48,9 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     LOGGER.info(f"Starting PageContentAPI server on {host}:{port}")
-    web.run_app(create_app(), host=host, port=port)
+    web.run_app(
+        create_app(),
+        host=host,
+        port=port,
+        access_log_class=HealthFilterAccessLogger,
+    )

@@ -25,6 +25,20 @@ def _read_int_env(name: str, default: int, *, min_value: int | None = None) -> i
     return value
 
 
+def _read_bool_env(name: str, default: bool) -> bool:
+    raw_value = os.getenv(name)
+    if raw_value is None:
+        return default
+
+    normalized = raw_value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError(f"{name} must be a boolean (true/false).")
+
+
 LATEST_DRIVER_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json"
 LATEST_PATCH_BY_BUILD_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/latest-patch-versions-per-build-with-downloads.json"
 LATEST_BY_MILESTONE_INDEX = "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json"
@@ -41,6 +55,7 @@ DRIVER_POOL_IDLE_TIMEOUT_SECONDS = _read_int_env(
 )
 HOST = _read_str_env("HOST", "0.0.0.0")
 PORT = _read_int_env("PORT", 8080, min_value=1)
+LOG_HEALTH_REQUESTS = _read_bool_env("LOG_HEALTH_REQUESTS", False)
 
 if DRIVER_POOL_MAX_ACTIVE < DRIVER_POOL_MIN_ACTIVE:
     raise ValueError("DRIVER_POOL_MAX_ACTIVE must be greater than or equal to DRIVER_POOL_MIN_ACTIVE.")
