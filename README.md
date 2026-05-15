@@ -13,7 +13,7 @@ Page Content API loads a web page in headless Chrome and returns the extracted m
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.12+
 - Google Chrome or Chromium installed locally
 - Network access to Chrome for Testing metadata/download endpoints at startup
 
