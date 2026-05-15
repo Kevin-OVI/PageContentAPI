@@ -141,7 +141,7 @@ class DriverPool:
             self._total_drivers -= 1
             asyncio.create_task(entry.close())
 
-    async def _acquire_driver(self) -> _PoolDriverEntry:
+    async def _acquire_driver(self, allow_starting: bool = True) -> _PoolDriverEntry:
         while True:
             if self._closed:
                 raise RuntimeError("Driver pool is closed.")
@@ -149,7 +149,7 @@ class DriverPool:
             try:
                 pool_driver = self._idle_drivers.pop()
             except KeyError:
-                if self._total_drivers < self.max_active:
+                if self._total_drivers < self.max_active and allow_starting:
                     self._total_drivers += 1
                     try:
                         pool_driver = await self._start_driver()
@@ -174,9 +174,9 @@ class DriverPool:
         async with self._release_condition:
             self._release_condition.notify()
 
-    async def use[T](self, callback: Callable[[WebDriver], T]) -> T:
+    async def use[T](self, callback: Callable[[WebDriver], T], allow_starting: bool = True) -> T:
         last_exception = None
-        pool_driver = await self._acquire_driver()
+        pool_driver = await self._acquire_driver(allow_starting)
         try:
             for attempt in range(3):
                 try:
