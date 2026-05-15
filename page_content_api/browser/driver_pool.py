@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
+from selenium.common import WebDriverException
 from selenium.webdriver.chrome.webdriver import WebDriver
 
 from .driver_setup import create_driver, create_profile_dir_from_template, remove_profile_dir
@@ -133,6 +134,13 @@ class DriverPool:
             self._total_drivers -= 1
             asyncio.create_task(entry.close())
 
+    def _remove_crashed_driver(self, entry: _PoolDriverEntry):
+        if entry in self._in_use_drivers:
+            LOGGER.warning("Removing crashed driver instance %s", entry.driver)
+            self._in_use_drivers.remove(entry)
+            self._total_drivers -= 1
+            asyncio.create_task(entry.close())
+
     async def _acquire_driver(self) -> _PoolDriverEntry:
         while True:
             if self._closed:
@@ -167,8 +175,19 @@ class DriverPool:
             self._release_condition.notify()
 
     async def use[T](self, callback: Callable[[WebDriver], T]) -> T:
+        last_exception = None
         pool_driver = await self._acquire_driver()
         try:
-            return await asyncio.to_thread(callback, pool_driver.driver)
+            for attempt in range(3):
+                try:
+                    return await asyncio.to_thread(callback, pool_driver.driver)
+                except WebDriverException as e:
+                    LOGGER.exception("WebDriverException occurred, restarting driver...", exc_info=e)
+                    last_exception = e
+                    self._remove_crashed_driver(pool_driver)
+                    pool_driver = await self._start_driver()
+                    pool_driver.set_in_use()
+                    self._in_use_drivers.add(pool_driver)
         finally:
             await self._release_driver(pool_driver)
+        raise last_exception if last_exception else RuntimeError("Failed to acquire a working driver after multiple attempts.")
