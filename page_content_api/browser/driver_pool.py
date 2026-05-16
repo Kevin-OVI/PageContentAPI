@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
-from selenium.common import WebDriverException
+from selenium.common import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.webdriver import WebDriver
 
 from .driver_setup import create_driver, create_profile_dir_from_template, remove_profile_dir
@@ -181,6 +181,8 @@ class DriverPool:
             for attempt in range(3):
                 try:
                     return await asyncio.to_thread(callback, pool_driver.driver)
+                except TimeoutException:  # Don't treat timeouts as driver failures since they can be caused by page issues rather than driver issues
+                    raise
                 except WebDriverException as e:
                     LOGGER.exception("WebDriverException occurred, restarting driver...", exc_info=e)
                     last_exception = e
