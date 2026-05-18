@@ -8,8 +8,9 @@ from .config import (
     DRIVER_POOL_MAX_ACTIVE,
     DRIVER_POOL_MIN_ACTIVE,
     TIMEOUT_SECONDS,
+    ENABLE_SHUTDOWN_ROUTE,
 )
-from .routes import handle_extract, handle_health
+from .routes import handle_extract, handle_health, handle_shutdown
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ def create_app() -> web.Application:
     app.router.add_get("/health", handle_health)
     app.router.add_get("/extract", handle_extract)
     app.router.add_post("/extract", handle_extract)
+    if ENABLE_SHUTDOWN_ROUTE:
+        app.router.add_post("/shutdown", handle_shutdown)
+        LOGGER.warning("Shutdown route enabled: POST /shutdown")
 
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)

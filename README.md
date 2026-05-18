@@ -36,6 +36,7 @@ The service reads these environment variables at import/startup:
 - `DRIVER_POOL_MIN_ACTIVE` (default: `1`, minimum: `0`)
 - `DRIVER_POOL_MAX_ACTIVE` (default: `4`, minimum: `1`)
 - `DRIVER_POOL_IDLE_TIMEOUT_SECONDS` (default: `120`, minimum: `0`)
+- `ENABLE_SHUTDOWN_ROUTE` (default: `false`)
 
 Constraint:
 
@@ -109,6 +110,14 @@ Success response (`200`):
 }
 ```
 
+### Shutdown (optional)
+
+Disabled by default. To enable, set `ENABLE_SHUTDOWN_ROUTE=true` and restart the server.
+
+```cmd
+curl -X POST http://127.0.0.1:8080/shutdown
+```
+
 Common error statuses:
 
 - `400` invalid JSON, invalid URL, invalid boolean parameters, or local/private host blocked
@@ -131,6 +140,12 @@ Concurrent run with extraction options:
 python harness.py https://example.com --concurrency 4 --count 10 --no-include-media
 ```
 
+Request shutdown (requires `ENABLE_SHUTDOWN_ROUTE=true`):
+
+```cmd
+python harness.py --shutdown
+```
+
 You can also target a non-default API base URL:
 
 ```cmd
@@ -144,6 +159,7 @@ python harness.py https://example.com --api-url http://127.0.0.1:8080
 - `page_content_api/app_factory.py` - app wiring, startup, and cleanup hooks
 - `page_content_api/routes/extract.py` - `/extract` request handling and validation
 - `page_content_api/routes/health.py` - `/health` handler
+- `page_content_api/routes/shutdown.py` - `/shutdown` handler (optional)
 - `page_content_api/browser/driver_setup.py` - driver resolution/download and WebDriver creation
 - `page_content_api/browser/driver_pool.py` - pooled driver lifecycle and concurrency control
 - `page_content_api/browser/extraction.py` - rendered page extraction flow

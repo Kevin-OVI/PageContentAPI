@@ -2,10 +2,10 @@ import argparse
 import asyncio
 import time
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ServerDisconnectedError
 
 
-async def run(
+async def run_extract(
     api_url: str,
     target_url: str,
     include_links: bool,
@@ -52,9 +52,17 @@ async def run(
             print(f"Sample Markdown:\n{first_ok.get('markdown', '')}...")
 
 
+async def run_shutdown(api_url: str) -> None:
+    async with ClientSession() as session:
+        try:
+            await session.post(f"{api_url}/shutdown")
+        except ServerDisconnectedError:
+            print("Server disconnected, shutdown likely successful.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple runner for the Page Content API")
-    parser.add_argument("url", help="URL to fetch and convert to markdown")
+    parser.add_argument("url", nargs="?", help="URL to fetch and convert to markdown")
     parser.add_argument(
         "--api-url",
         default="http://127.0.0.1:8080",
@@ -96,17 +104,26 @@ if __name__ == "__main__":
         action="store_false",
         help="Replace media with placeholders in markdown output",
     )
+    parser.add_argument(
+        "--shutdown",
+        action="store_true",
+        help="Request server shutdown (requires ENABLE_SHUTDOWN_ROUTE=true)",
+    )
     parser.set_defaults(include_links=True, include_media=True)
 
     args = parser.parse_args()
-    asyncio.run(
-        run(
-            args.api_url,
-            args.url,
-            args.include_links,
-            args.include_media,
-            args.concurrency,
-            args.count,
-        ),
-    )
-
+    if args.shutdown:
+        asyncio.run(run_shutdown(args.api_url))
+    else:
+        if not args.url:
+            parser.error("url is required unless --shutdown is provided.")
+        asyncio.run(
+            run_extract(
+                args.api_url,
+                args.url,
+                args.include_links,
+                args.include_media,
+                args.concurrency,
+                args.count,
+            ),
+        )

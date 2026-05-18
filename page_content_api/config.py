@@ -56,6 +56,7 @@ DRIVER_POOL_IDLE_TIMEOUT_SECONDS = _read_int_env(
 HOST = _read_str_env("HOST", "0.0.0.0")
 PORT = _read_int_env("PORT", 8080, min_value=1)
 LOG_HEALTH_REQUESTS = _read_bool_env("LOG_HEALTH_REQUESTS", False)
+ENABLE_SHUTDOWN_ROUTE = _read_bool_env("ENABLE_SHUTDOWN_ROUTE", False)
 
 if DRIVER_POOL_MAX_ACTIVE < DRIVER_POOL_MIN_ACTIVE:
     raise ValueError("DRIVER_POOL_MAX_ACTIVE must be greater than or equal to DRIVER_POOL_MIN_ACTIVE.")
