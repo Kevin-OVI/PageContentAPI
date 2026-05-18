@@ -178,20 +178,19 @@ class DriverPool:
 
     async def use[T](self, callback: Callable[[WebDriver], T], allow_starting: bool = True) -> T:
         last_exception = None
-        pool_driver = await self._acquire_driver(allow_starting)
-        try:
-            for attempt in range(3):
-                try:
-                    return await asyncio.to_thread(callback, pool_driver.driver)
-                except TimeoutException:  # Don't treat timeouts as driver failures since they can be caused by page issues rather than driver issues
-                    raise
-                except WebDriverException as e:
-                    LOGGER.exception("WebDriverException occurred, restarting driver...", exc_info=e)
-                    last_exception = e
-                    self._remove_crashed_driver(pool_driver)
-                    pool_driver = await self._start_driver()
-                    pool_driver.set_in_use()
-                    self._in_use_drivers.add(pool_driver)
-        finally:
-            await self._release_driver(pool_driver)
+        for attempt in range(3):
+            driver_crashed = False
+            pool_driver = await self._acquire_driver(allow_starting)
+            try:
+                return await asyncio.to_thread(callback, pool_driver.driver)
+            except TimeoutException:  # Don't treat timeouts as driver failures since they can be caused by page issues rather than driver issues
+                raise
+            except WebDriverException as e:
+                LOGGER.exception("WebDriverException occurred, restarting driver...", exc_info=e)
+                last_exception = e
+                driver_crashed = True
+                self._remove_crashed_driver(pool_driver)
+            finally:
+                if not driver_crashed:
+                    await self._release_driver(pool_driver)
         raise last_exception if last_exception else RuntimeError("Failed to acquire a working driver after multiple attempts.")
