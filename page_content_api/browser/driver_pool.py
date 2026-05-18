@@ -135,11 +135,13 @@ class DriverPool:
             asyncio.create_task(entry.close())
 
     def _remove_crashed_driver(self, entry: _PoolDriverEntry):
-        if entry in self._in_use_drivers:
-            LOGGER.warning("Removing crashed driver instance %s", entry.driver)
-            self._in_use_drivers.remove(entry)
-            self._total_drivers -= 1
-            asyncio.create_task(entry.close())
+        if entry not in self._in_use_drivers:
+            raise ValueError("Can only remove drivers that are currently in use.")
+
+        LOGGER.warning("Removing crashed driver instance %s", entry.driver)
+        self._in_use_drivers.remove(entry)
+        self._total_drivers -= 1
+        asyncio.create_task(entry.close())
 
     async def _acquire_driver(self, allow_starting: bool = True) -> _PoolDriverEntry:
         while True:
