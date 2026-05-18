@@ -2,3 +2,6 @@ aiohttp>=3.13.5
 selenium>=4.43.0
 beautifulsoup4>=4.14.3
 markdownify>=1.2.2
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+pytest-aiohttp>=1.0.5

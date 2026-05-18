@@ -25,6 +25,20 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Tests
+
+Run the full test suite:
+
+```cmd
+python -m pytest
+```
+
+Or via the lightweight test runner:
+
+```cmd
+python tests\run_tests.py
+```
+
 ## Configuration
 
 The service reads these environment variables at import/startup:
@@ -175,3 +189,6 @@ From `requirements.txt`:
 - `selenium`
 - `beautifulsoup4`
 - `markdownify`
+- `pytest`
+- `pytest-asyncio`
+- `pytest-aiohttp`
