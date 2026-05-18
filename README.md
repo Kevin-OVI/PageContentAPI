@@ -30,6 +30,7 @@ pip install -r requirements.txt
 Run the full test suite:
 
 ```cmd
+pip install -r requirements.txt -r requirements-test.txt
 python -m pytest
 ```
 
@@ -189,6 +190,9 @@ From `requirements.txt`:
 - `selenium`
 - `beautifulsoup4`
 - `markdownify`
+
+From `requirements-test.txt`:
+
 - `pytest`
 - `pytest-asyncio`
 - `pytest-aiohttp`
