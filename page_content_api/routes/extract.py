@@ -7,8 +7,8 @@ from aiohttp import web
 from selenium.common import TimeoutException, WebDriverException
 from selenium.webdriver.chrome.webdriver import WebDriver
 
-from ..browser import DriverPool, extract_markdown
-from ..config import MAX_MARKDOWN_CHARS, TIMEOUT_SECONDS
+from ..browser import CHALLENGE, CloudflareChallengeError, DriverPool, extract_markdown
+from ..config import CHALLENGE_WAIT_SECONDS, MAX_MARKDOWN_CHARS, TIMEOUT_SECONDS
 from ..validation import is_http_url, looks_local_host, parse_bool_param
 
 LOGGER = logging.getLogger(__name__)
@@ -63,7 +63,15 @@ async def handle_extract(request: web.Request) -> web.Response:
         LOGGER.info("Driver acquired for hostname=%s wait_ms=%d", hostname, pool_wait_ms)
 
         extraction_started = time.monotonic()
-        result = extract_markdown(driver, url, TIMEOUT_SECONDS, MAX_MARKDOWN_CHARS, include_links, include_media)
+        result = extract_markdown(
+            driver,
+            url,
+            TIMEOUT_SECONDS,
+            MAX_MARKDOWN_CHARS,
+            include_links,
+            include_media,
+            challenge_wait_seconds=CHALLENGE_WAIT_SECONDS,
+        )
         extraction_ms = int((time.monotonic() - extraction_started) * 1000)
 
         LOGGER.info(
@@ -82,6 +90,16 @@ async def handle_extract(request: web.Request) -> web.Response:
     except (TimeoutError, TimeoutException):
         LOGGER.warning("Request timed out for url=%s", url)
         return web.json_response({"error": "Page load timed out."}, status=504)
+    except CloudflareChallengeError as exc:
+        if exc.kind == CHALLENGE:
+            return web.json_response(
+                {"error": "Page is behind a Cloudflare challenge that did not clear.", "challenge": exc.kind},
+                status=403,
+            )
+        return web.json_response(
+            {"error": "Cloudflare returned a block or error page instead of the content.", "challenge": exc.kind},
+            status=502,
+        )
     except WebDriverException as exc:
         LOGGER.error("ChromeDriver failure for url=%s: %s", url, exc.msg)
         return web.json_response({"error": f"ChromeDriver failure: {exc.msg}"}, status=502)

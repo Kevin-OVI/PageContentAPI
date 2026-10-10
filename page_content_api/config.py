@@ -45,6 +45,7 @@ LATEST_BY_MILESTONE_INDEX = "https://googlechromelabs.github.io/chrome-for-testi
 DRIVER_ROOT = Path(_read_str_env("DRIVER_ROOT", os.path.abspath(".drivers")))
 RESET_URL = "about:blank"
 TIMEOUT_SECONDS = _read_int_env("TIMEOUT_SECONDS", 25, min_value=1)
+CHALLENGE_WAIT_SECONDS = _read_int_env("CHALLENGE_WAIT_SECONDS", 15, min_value=0)
 MAX_MARKDOWN_CHARS = _read_int_env("MAX_MARKDOWN_CHARS", 100_000, min_value=1)
 DRIVER_POOL_MIN_ACTIVE = _read_int_env("DRIVER_POOL_MIN_ACTIVE", 1, min_value=0)
 DRIVER_POOL_MAX_ACTIVE = _read_int_env("DRIVER_POOL_MAX_ACTIVE", 4, min_value=1)

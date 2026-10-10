@@ -47,6 +47,7 @@ The service reads these environment variables at import/startup:
 - `HOST` (default: `0.0.0.0`)
 - `PORT` (default: `8080`)
 - `TIMEOUT_SECONDS` (default: `25`, minimum: `1`)
+- `CHALLENGE_WAIT_SECONDS` (default: `15`, minimum: `0`): how long to wait for a Cloudflare challenge page to clear by itself before giving up
 - `MAX_MARKDOWN_CHARS` (default: `100000`, minimum: `1`)
 - `DRIVER_POOL_MIN_ACTIVE` (default: `1`, minimum: `0`)
 - `DRIVER_POOL_MAX_ACTIVE` (default: `4`, minimum: `1`)
@@ -136,7 +137,8 @@ curl -X POST http://127.0.0.1:8080/shutdown
 Common error statuses:
 
 - `400` invalid JSON, invalid URL, invalid boolean parameters, or local/private host blocked
-- `502` ChromeDriver/Selenium failure
+- `403` page is behind a Cloudflare challenge that did not clear within `CHALLENGE_WAIT_SECONDS` (body includes `"challenge": "challenge"`)
+- `502` ChromeDriver/Selenium failure, or Cloudflare returned a block/error page (body includes `"challenge": "error_page"`)
 - `503` driver pool unavailable
 - `504` page load timeout
 - `500` unexpected error fallback

@@ -5,6 +5,7 @@ from typing import Any
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
+from .challenge import wait_for_challenge_to_clear
 from .markdown_processing import html_fragment_to_markdown
 from ..config import RESET_URL
 
@@ -66,6 +67,7 @@ def extract_markdown(
         max_chars: int,
         include_links: bool,
         include_media: bool,
+        challenge_wait_seconds: int = 0,
 ) -> dict[str, Any]:
     LOGGER.info("Starting page extraction for url=%s", url)
     try:
@@ -76,6 +78,7 @@ def extract_markdown(
         if driver.current_url == RESET_URL:
             LOGGER.error(f"Page failed to load and is still at {RESET_URL} for url=%s", url)
             raise TimeoutError("Page failed to load within the specified timeout.")
+        wait_for_challenge_to_clear(driver, challenge_wait_seconds)
         _scroll_until_stable(driver, timeout_seconds)
         time.sleep(2)  # Allow additional time for dynamic content to load.
 

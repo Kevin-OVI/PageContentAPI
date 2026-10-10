@@ -3,6 +3,7 @@ from selenium.common import TimeoutException, WebDriverException
 
 import page_content_api.routes.extract as extract_module
 from page_content_api.app_factory import create_app
+from page_content_api.browser import CHALLENGE, ERROR_PAGE, CloudflareChallengeError
 
 
 class FakeDriver:
@@ -67,8 +68,8 @@ async def test_extract_rejects_local_host(aiohttp_client, app):
 async def test_extract_success(aiohttp_client, app, monkeypatch):
     captured = {}
 
-    def fake_extract_markdown(driver, url, timeout_seconds, max_chars, include_links, include_media):
-        captured["args"] = (url, timeout_seconds, max_chars, include_links, include_media)
+    def fake_extract_markdown(driver, url, timeout_seconds, max_chars, include_links, include_media, challenge_wait_seconds):
+        captured["args"] = (url, timeout_seconds, max_chars, include_links, include_media, challenge_wait_seconds)
         return {"title": "Title", "url": url, "markdown": "Body"}
 
     monkeypatch.setattr(extract_module, "extract_markdown", fake_extract_markdown)
@@ -121,3 +122,23 @@ async def test_extract_timeout_exception(aiohttp_client, app):
     response = await client.get("/extract?url=https://example.com")
 
     assert response.status == 504
+
+
+@pytest.mark.asyncio
+async def test_extract_cloudflare_challenge(aiohttp_client, app):
+    app["driver_pool"] = FakePool(exc=CloudflareChallengeError(CHALLENGE, "https://example.com"))
+    client = await aiohttp_client(app)
+    response = await client.get("/extract?url=https://example.com")
+
+    assert response.status == 403
+    assert (await response.json())["challenge"] == CHALLENGE
+
+
+@pytest.mark.asyncio
+async def test_extract_cloudflare_error_page(aiohttp_client, app):
+    app["driver_pool"] = FakePool(exc=CloudflareChallengeError(ERROR_PAGE, "https://example.com"))
+    client = await aiohttp_client(app)
+    response = await client.get("/extract?url=https://example.com")
+
+    assert response.status == 502
+    assert (await response.json())["challenge"] == ERROR_PAGE
